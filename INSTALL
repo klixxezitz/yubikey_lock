@@ -1,0 +1,16 @@
+This script has been tested on CentOS 7 with GNome 3
+
+For installation, do the following:
+
+1. Install 'ykinfo' executable - Package 'ykpers' on CentOS 7
+
+Now, go on by installing  the script:
+
+2. Put '99-yubikey-screen-lock.rules' to /etc/udev/rules.d/
+3. Do a 'sudo udevadm control --reload-rules'
+4. Edit 'yubikeys' to include your user and the serial of your yubikey
+5. Put 'yubikeys' to /etc/sysconfig/
+6. Put 'yubikey-screen-lock' to /usr/local/bin/ and make it executable
+
+
+Now, go ahead with testing the stuff by plugging in/out you yubikey

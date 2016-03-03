@@ -1,0 +1,88 @@
+#!/bin/bash
+#
+# Script for locking/unlocking screen via yubikey
+# Enhanced for GNome Desktops
+#
+# Requires: - ykinfo (Package ykpers)
+#
+#
+YUBIMAPFILE="/etc/sysconfig/yubikeys"
+USER=$(ps -ef | grep -v grep | grep -v root | grep session | head -n 1 | awk -F ' ' '{ print $1 }')
+LOCKFILE="/usr/local/bin/yubikey-screen-lock.locked"
+
+CHECK_GNOME=$(ps -ef | grep -v grep | grep ${USER} | grep gnome-session | wc -l)
+if [ ${CHECK_GNOME} -ne 0 ]
+then
+	DESKTOP="gnome"
+	SESSIONID=$(/bin/loginctl list-sessions | grep "seat" | grep ${USER} | awk -F ' ' '{ print $1 }')
+fi
+
+CHECK_KDE=$(ps -ef | grep -v grep | grep ${USER} | grep kded | wc -l)
+if [ ${CHECK_KDE} -ne 0 ]
+then
+	DESKTOP="kde"
+fi
+
+CHECK_CINNAMON=$(ps -ef | grep -v grep | grep ${USER} | grep cinnamon-session | wc -l)
+if [ ${CHECK_CINNAMON} -ne 0 ]
+then
+	DESKTOP="cinnamon"
+fi
+
+case "${1}" in
+enable)
+	#We do not want somebody to unlock your manually locked screen be removing and entering the yubikey...
+	IS_ALREADY_LOCKED=$(/bin/loginctl show-session ${SESSIONID}  | grep "IdleHint" | awk -F '=' '{ print $2 }')
+	if [ "${IS_ALREADY_LOCKED}" == "yes" ]
+	then
+		exit 1
+	fi
+	#Is this user allowed to lock the screen...
+	YUBISERIALFROMFILE=$(grep ${USER} ${YUBIMAPFILE} | awk -F '00000-' '{ print $2 }')
+	#YUBISERIALFROMKEY=$(ykinfo -s | awk -F ' ' '{ print $2 }')
+	#if [ "${YUBISERIALFROMKEY}" == "${YUBISERIALFROMFILE}" ]
+	# --> This does not make sense, as we eject the key in order to lock the screen.
+	# --> --> So, 'ykinfo -s' won't work...
+	if [ -n "${YUBISERIALFROMFILE}" ]
+	then
+		case "${DESKTOP}" in
+		gnome)
+			/bin/loginctl lock-session ${SESSIONID}
+			touch ${LOCKFILE}
+			;;
+		kde)
+			/bin/su ${USER} -c "DISPLAY=:0 /usr/bin/xscreensaver-command -activate"
+			touch ${LOCKFILE}
+			;;
+		cinnamon)
+			/bin/su ${USER} -c "DISPLAY=:0 /usr/bin/cinnamon-screensaver-command -a"
+			touch ${LOCKFILE}
+			;;
+		esac
+	fi
+	;;
+disable)
+	if [ -e ${LOCKFILE} ]
+	then
+		YUBISERIALFROMFILE=$(grep ${USER} ${YUBIMAPFILE} | awk -F '00000-' '{ print $2 }')
+		YUBISERIALFROMKEY=$(ykinfo -s | awk -F ' ' '{ print $2 }')
+		if [ "${YUBISERIALFROMKEY}" == "${YUBISERIALFROMFILE}" ]
+		then
+			case "${DESKTOP}" in
+			gnome)
+				/bin/loginctl unlock-session ${SESSIONID}
+				rm ${LOCKFILE}
+				;;
+			kde)
+				/bin/su ${USER} -c "DISPLAY=:0 /usr/bin/xscreensaver-command -deactivate"
+				rm ${LOCKFILE}
+				;;
+			cinnamon)
+				/bin/su ${USER} -c "DISPLAY=:0 /usr/bin/cinnamon-screensaver-command -d"
+				rm ${LOCKFILE}
+				;;
+			esac
+		fi
+	fi
+	;;
+esac
